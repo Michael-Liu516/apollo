@@ -16,13 +16,9 @@
 
 #include "modules/prediction/common/message_process.h"
 
-#include <algorithm>
-#include <iomanip>
-#include <limits>
-#include <vector>
-
 #include "cyber/common/file.h"
 #include "cyber/record/record_reader.h"
+#include "cyber/record/record_writer.h"
 
 #include "modules/common/adapters/adapter_gflags.h"
 #include "modules/prediction/common/feature_output.h"
@@ -44,12 +40,15 @@ namespace apollo {
 namespace prediction {
 
 using apollo::common::adapter::AdapterConfig;
+using apollo::cyber::record::RecordMessage;
+using apollo::cyber::record::RecordReader;
+using apollo::cyber::record::RecordWriter;
+using apollo::cyber::proto::SingleMessage;
 using apollo::localization::LocalizationEstimate;
 using apollo::perception::PerceptionObstacle;
 using apollo::perception::PerceptionObstacles;
 using apollo::planning::ADCTrajectory;
-using cyber::record::RecordMessage;
-using cyber::record::RecordReader;
+using apollo::storytelling::Stories;
 
 bool MessageProcess::Init() {
   InitContainers();
@@ -181,7 +180,7 @@ void MessageProcess::ContainerProcess(
   ptr_obstacles_container->BuildLaneGraph();
 
   // Assign CautionLevel for obstacles
-  ObstaclesPrioritizer::Instance()->AssignCautionLevel(scenario);
+  ObstaclesPrioritizer::Instance()->AssignCautionLevel();
 
   // Analyze RightOfWay for the caution obstacles
   RightOfWay::Analyze();
@@ -236,7 +235,8 @@ void MessageProcess::OnPerception(
     return;
   }
   // Make predictions
-  PredictorManager::Instance()->Run(ptr_ego_trajectory_container,
+  PredictorManager::Instance()->Run(perception_obstacles,
+                                    ptr_ego_trajectory_container,
                                     ptr_obstacles_container);
 
   // Get predicted obstacles
@@ -248,7 +248,7 @@ void MessageProcess::OnLocalization(
   auto ptr_ego_pose_container =
       ContainerManager::Instance()->GetContainer<PoseContainer>(
           AdapterConfig::LOCALIZATION);
-  CHECK(ptr_ego_pose_container != nullptr);
+  ACHECK(ptr_ego_pose_container != nullptr);
   ptr_ego_pose_container->Insert(localization);
 
   ADEBUG << "Received a localization message ["
@@ -259,26 +259,62 @@ void MessageProcess::OnPlanning(const planning::ADCTrajectory& adc_trajectory) {
   auto ptr_ego_trajectory_container =
       ContainerManager::Instance()->GetContainer<ADCTrajectoryContainer>(
           AdapterConfig::PLANNING_TRAJECTORY);
-  CHECK(ptr_ego_trajectory_container != nullptr);
+  ACHECK(ptr_ego_trajectory_container != nullptr);
   ptr_ego_trajectory_container->Insert(adc_trajectory);
 
   ADEBUG << "Received a planning message [" << adc_trajectory.ShortDebugString()
          << "].";
+
+  auto ptr_storytelling_container =
+      ContainerManager::Instance()->GetContainer<StoryTellingContainer>(
+          AdapterConfig::STORYTELLING);
+  CHECK_NOTNULL(ptr_storytelling_container);
+  ptr_ego_trajectory_container->SetJunction(
+      ptr_storytelling_container->ADCJunctionId(),
+      ptr_storytelling_container->ADCDistanceToJunction());
 }
 
-void MessageProcess::ProcessOfflineData(const std::string& record_filename) {
-  RecordReader reader(record_filename);
+void MessageProcess::OnStoryTelling(const Stories& story) {
+  auto ptr_storytelling_container =
+      ContainerManager::Instance()->GetContainer<StoryTellingContainer>(
+          AdapterConfig::STORYTELLING);
+  CHECK_NOTNULL(ptr_storytelling_container);
+  ptr_storytelling_container->Insert(story);
+
+  ADEBUG << "Received a storytelling message [" << story.ShortDebugString()
+         << "].";
+}
+
+void MessageProcess::ProcessOfflineData(const std::string& record_filepath) {
+  RecordReader reader(record_filepath);
   RecordMessage message;
+  RecordWriter writer;
+  if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpRecord) {
+    writer.Open(record_filepath + ".new_prediction");
+  }
   while (reader.ReadMessage(&message)) {
     if (message.channel_name == FLAGS_perception_obstacle_topic) {
       PerceptionObstacles perception_obstacles;
       if (perception_obstacles.ParseFromString(message.content)) {
+        if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpRecord) {
+          writer.WriteMessage<PerceptionObstacles>(message.channel_name,
+              perception_obstacles, message.time);
+        }
         PredictionObstacles prediction_obstacles;
         OnPerception(perception_obstacles, &prediction_obstacles);
+        if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpRecord) {
+          writer.WriteMessage<PredictionObstacles>(FLAGS_prediction_topic,
+              prediction_obstacles, message.time);
+          AINFO << "Generated a new prediction message.";
+        }
       }
     } else if (message.channel_name == FLAGS_localization_topic) {
       LocalizationEstimate localization;
       if (localization.ParseFromString(message.content)) {
+        if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpRecord) {
+          writer.WriteMessage<LocalizationEstimate>(message.channel_name,
+              localization, message.time);
+        }
         OnLocalization(localization);
       }
     } else if (message.channel_name == FLAGS_planning_trajectory_topic) {
@@ -287,6 +323,9 @@ void MessageProcess::ProcessOfflineData(const std::string& record_filename) {
         OnPlanning(adc_trajectory);
       }
     }
+  }
+  if (FLAGS_prediction_offline_mode == PredictionConstants::kDumpRecord) {
+    writer.Close();
   }
 }
 

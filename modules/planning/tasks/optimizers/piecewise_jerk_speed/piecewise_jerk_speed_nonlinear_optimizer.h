@@ -40,7 +40,8 @@ class PiecewiseJerkSpeedNonlinearOptimizer : public SpeedOptimizer {
                          const common::TrajectoryPoint& init_point,
                          SpeedData* const speed_data) override;
 
-  common::Status SetUpStatesAndBounds(const PathData& path_data);
+  common::Status SetUpStatesAndBounds(const PathData& path_data,
+                                      const SpeedData& speed_data);
 
   bool CheckSpeedLimitFeasibility();
 
@@ -70,12 +71,14 @@ class PiecewiseJerkSpeedNonlinearOptimizer : public SpeedOptimizer {
 
   // st states dynamically feasibility bounds
   double s_dot_max_ = 0.0;
-  double s_ddot_max_ = 0.0;
   double s_ddot_min_ = 0.0;
-  double s_dddot_abs_max_ = 0.0;
+  double s_ddot_max_ = 0.0;
+  double s_dddot_min_ = 0.0;
+  double s_dddot_max_ = 0.0;
 
   // st safety bounds
   std::vector<std::pair<double, double>> s_bounds_;
+  std::vector<std::pair<double, double>> s_soft_bounds_;
 
   // speed limits
   SpeedLimit speed_limit_;

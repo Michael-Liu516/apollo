@@ -19,11 +19,7 @@
  **/
 #include "modules/planning/tasks/optimizers/open_space_trajectory_partition/open_space_trajectory_partition.h"
 
-#include <limits>
 #include <queue>
-#include <string>
-#include <utility>
-#include <vector>
 
 #include "absl/strings/str_cat.h"
 #include "modules/common/math/polygon2d.h"
@@ -326,8 +322,8 @@ bool OpenSpaceTrajectoryPartition::EncodeTrajectory(
     AERROR << "Fail to encode trajectory because it is empty";
     return false;
   }
-  constexpr double encoding_origin_x = 58700.0;
-  constexpr double encoding_origin_y = 4141000.0;
+  static constexpr double encoding_origin_x = 58700.0;
+  static constexpr double encoding_origin_y = 4141000.0;
   const auto& init_path_point = trajectory.front().path_point();
   const auto& last_path_point = trajectory.back().path_point();
 
@@ -445,9 +441,6 @@ void OpenSpaceTrajectoryPartition::PartitionTrajectory(
             : canbus::Chassis::GEAR_REVERSE;
 
     if (cur_gear != *gear) {
-      LoadTrajectoryPoint(trajectory_point, *gear, &last_pos_vec, &distance_s,
-                          trajectory);
-
       partitioned_trajectories->emplace_back();
       current_trajectory_gear = &(partitioned_trajectories->back());
       current_trajectory_gear->second = cur_gear;

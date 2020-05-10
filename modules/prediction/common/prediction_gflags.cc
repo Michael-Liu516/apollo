@@ -66,6 +66,8 @@ DEFINE_bool(enable_all_junction, false,
             "If consider all junction with junction_mlp_model.");
 DEFINE_int32(caution_obs_max_nums, 6,
              "The max number of caution-level obstacles");
+DEFINE_double(caution_distance_threshold, 60.0,
+              "Distance threshold for caution obstacles");
 DEFINE_double(caution_search_distance_ahead, 50.0,
               "The distance ahead to search caution-level obstacles");
 DEFINE_double(caution_search_distance_backward, 50.0,
@@ -181,6 +183,14 @@ DEFINE_string(torch_pedestrian_interaction_prediction_layer_file,
               "/apollo/modules/prediction/data/"
               "pedestrian_interaction_prediction_layer.pt",
               "pedestrian interaction prediction layer");
+DEFINE_string(
+    torch_pedestrian_semantic_lstm_file,
+    "/apollo/modules/prediction/data/semantic_lstm_pedestrian_model.pt",
+    "Pedestrian semantic lstm model file, default for gpu");
+DEFINE_string(
+    torch_pedestrian_semantic_lstm_cpu_file,
+    "/apollo/modules/prediction/data/semantic_lstm_pedestrian_cpu_model.pt",
+    "Pedestrian semantic lstm cpu model file");
 DEFINE_string(torch_lane_aggregating_obstacle_encoding_file,
               "/apollo/modules/prediction/data/"
               "traced_online_obs_enc.pt",
@@ -244,7 +254,7 @@ DEFINE_double(default_s_if_no_obstacle_in_lane_sequence, 1000.0,
               "The default s value if no obstacle in the lane sequence.");
 DEFINE_double(default_l_if_no_obstacle_in_lane_sequence, 10.0,
               "The default l value if no obstacle in the lane sequence.");
-DEFINE_bool(enable_semantic_map, false, "If enable semantic map on prediction");
+DEFINE_bool(enable_semantic_map, true, "If enable semantic map on prediction");
 
 // Obstacle trajectory
 DEFINE_bool(enable_cruise_regression, false,

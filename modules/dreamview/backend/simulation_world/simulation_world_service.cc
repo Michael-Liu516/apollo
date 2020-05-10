@@ -48,7 +48,6 @@ using apollo::common::VehicleConfigHelper;
 using apollo::common::monitor::MonitorMessage;
 using apollo::common::monitor::MonitorMessageItem;
 using apollo::common::time::Clock;
-using apollo::common::time::millis;
 using apollo::common::util::DownsampleByAngle;
 using apollo::common::util::FillHeader;
 using apollo::control::ControlCommand;
@@ -372,8 +371,7 @@ void SimulationWorldService::Update() {
   UpdateLatencies();
 
   world_.set_sequence_num(world_.sequence_num() + 1);
-  world_.set_timestamp(
-      static_cast<double>(apollo::common::time::AsInt64<millis>(Clock::Now())));
+  world_.set_timestamp(static_cast<double>(absl::ToUnixMillis(Clock::Now())));
 }
 
 void SimulationWorldService::UpdateDelays() {
@@ -415,7 +413,7 @@ Json SimulationWorldService::GetUpdateAsJson(double radius) const {
 
   Json update;
   update["type"] = "SimWorldUpdate";
-  update["timestamp"] = apollo::common::time::AsInt64<millis>(Clock::Now());
+  update["timestamp"] = absl::ToUnixMillis(Clock::Now());
   update["world"] = sim_world_json_string;
 
   return update;
@@ -463,7 +461,6 @@ void SimulationWorldService::UpdateSimulationWorld(
   // message header. It is done on both the SimulationWorld object
   // itself and its auto_driving_car() field.
   auto_driving_car->set_timestamp_sec(localization.header().timestamp_sec());
-
   ready_to_push_.store(true);
 }
 

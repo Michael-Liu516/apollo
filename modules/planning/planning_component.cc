@@ -30,7 +30,6 @@
 namespace apollo {
 namespace planning {
 
-using apollo::common::time::Clock;
 using apollo::hdmap::HDMapUtil;
 using apollo::perception::TrafficLightDetection;
 using apollo::relative_map::MapMsg;
@@ -44,9 +43,17 @@ bool PlanningComponent::Init() {
     planning_base_ = std::make_unique<OnLanePlanning>();
   }
 
-  CHECK(apollo::cyber::common::GetProtoFromFile(FLAGS_planning_config_file,
-                                                &config_))
+  ACHECK(apollo::cyber::common::GetProtoFromFile(FLAGS_planning_config_file,
+                                                 &config_))
       << "failed to load planning config file " << FLAGS_planning_config_file;
+
+  if (FLAGS_planning_offline_mode > 0) {
+    if (!message_process_.Init()) {
+      AERROR << "failed to init MessageProcess";
+      return false;
+    }
+  }
+
   planning_base_->Init(config_);
 
   routing_reader_ = node_->CreateReader<RoutingResponse>(
@@ -97,7 +104,7 @@ bool PlanningComponent::Proc(
     const std::shared_ptr<canbus::Chassis>& chassis,
     const std::shared_ptr<localization::LocalizationEstimate>&
         localization_estimate) {
-  CHECK(prediction_obstacles != nullptr);
+  ACHECK(prediction_obstacles != nullptr);
 
   // check and process possible rerouting request
   CheckRerouting();
@@ -130,6 +137,15 @@ bool PlanningComponent::Proc(
     return false;
   }
 
+  if (FLAGS_planning_offline_mode == 1) {
+    // data process for online training
+    message_process_.OnChassis(*local_view_.chassis);
+    message_process_.OnPrediction(*local_view_.prediction_obstacles);
+    message_process_.OnRoutingResponse(*local_view_.routing);
+    message_process_.OnTrafficLightDetection(*local_view_.traffic_light);
+    message_process_.OnLocalization(*local_view_.localization_estimate);
+  }
+
   ADCTrajectory adc_trajectory_pb;
   planning_base_->RunOnce(local_view_, &adc_trajectory_pb);
   auto start_time = adc_trajectory_pb.header().timestamp_sec();
@@ -140,7 +156,7 @@ bool PlanningComponent::Proc(
   for (auto& p : *adc_trajectory_pb.mutable_trajectory_point()) {
     p.set_relative_time(p.relative_time() + dt);
   }
-  planning_writer_->Write(std::make_shared<ADCTrajectory>(adc_trajectory_pb));
+  planning_writer_->Write(adc_trajectory_pb);
 
   // record in history
   auto* history = History::Instance();
@@ -158,8 +174,7 @@ void PlanningComponent::CheckRerouting() {
   }
   common::util::FillHeader(node_->Name(), rerouting->mutable_routing_request());
   rerouting->set_need_rerouting(false);
-  rerouting_writer_->Write(
-      std::make_shared<RoutingRequest>(rerouting->routing_request()));
+  rerouting_writer_->Write(rerouting->routing_request());
 }
 
 bool PlanningComponent::CheckInput() {
@@ -191,7 +206,7 @@ bool PlanningComponent::CheckInput() {
   if (not_ready->has_reason()) {
     AERROR << not_ready->reason() << "; skip the planning cycle.";
     common::util::FillHeader(node_->Name(), &trajectory_pb);
-    planning_writer_->Write(std::make_shared<ADCTrajectory>(trajectory_pb));
+    planning_writer_->Write(trajectory_pb);
     return false;
   }
   return true;

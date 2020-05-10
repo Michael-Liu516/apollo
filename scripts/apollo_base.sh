@@ -101,7 +101,7 @@ function set_lib_path() {
   fi
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/apollo/lib:/usr/local/apollo/local_integ/lib
   export LD_LIBRARY_PATH=/usr/local/adolc/lib64:$LD_LIBRARY_PATH
-  export LD_LIBRARY_PATH=/usr/local/Qt5.5.1/5.5/gcc_64/lib:$LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH=/usr/local/Qt5.12.2/5.12.2/gcc_64/lib:$LD_LIBRARY_PATH
   export LD_LIBRARY_PATH=/usr/local/fast-rtps/lib:$LD_LIBRARY_PATH
   if [ "$USE_GPU" != "1" ];then
     export LD_LIBRARY_PATH=/usr/local/apollo/libtorch/lib:$LD_LIBRARY_PATH
@@ -110,7 +110,7 @@ function set_lib_path() {
   fi
   export LD_LIBRARY_PATH=/usr/local/apollo/boost/lib:$LD_LIBRARY_PATH
   export LD_LIBRARY_PATH=/usr/local/apollo/paddlepaddle_dep/mkldnn/lib/:$LD_LIBRARY_PATH
-  export PYTHONPATH=/usr/local/lib/python2.7/dist-packages:${PY_LIB_PATH}:${PY_TOOLS_PATH}:${PYTHONPATH}
+  export PYTHONPATH=${PY_LIB_PATH}:${PY_TOOLS_PATH}:${PYTHONPATH}
 
   # Set teleop paths
   export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH

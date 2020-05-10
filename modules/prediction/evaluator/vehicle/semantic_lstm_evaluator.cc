@@ -17,7 +17,6 @@
 #include "modules/prediction/evaluator/vehicle/semantic_lstm_evaluator.h"
 
 #include <omp.h>
-#include <unordered_map>
 
 #include "Eigen/Dense"
 
@@ -109,12 +108,18 @@ bool SemanticLSTMEvaluator::Evaluate(Obstacle* obstacle_ptr,
   std::vector<double> pred_traj;
 
   auto start_time = std::chrono::system_clock::now();
-  at::Tensor torch_output_tensor =
-      torch_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
+  at::Tensor torch_output_tensor = torch_default_output_tensor_;
+  if (obstacle_ptr->IsPedestrian()) {
+    torch_output_tensor = torch_pedestrian_model_.forward(torch_inputs).
+                          toTensor().to(torch::kCPU);
+  } else {
+    torch_output_tensor =
+        torch_vehicle_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
+  }
 
   auto end_time = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = end_time - start_time;
-  AERROR << "Semantic_LSTM_evaluator used time: " << diff.count() * 1000
+  ADEBUG << "Semantic_LSTM_evaluator used time: " << diff.count() * 1000
          << " ms.";
   auto torch_output = torch_output_tensor.accessor<float, 3>();
 
@@ -232,13 +237,33 @@ void SemanticLSTMEvaluator::LoadModel() {
   if (FLAGS_use_cuda && torch::cuda::is_available()) {
     ADEBUG << "CUDA is available";
     device_ = torch::Device(torch::kCUDA);
-    torch_model_ =
+    torch_vehicle_model_ =
         torch::jit::load(FLAGS_torch_vehicle_semantic_lstm_file, device_);
+    torch_pedestrian_model_ =
+        torch::jit::load(FLAGS_torch_pedestrian_semantic_lstm_file, device_);
   } else {
-    torch_model_ =
+    torch_vehicle_model_ =
         torch::jit::load(FLAGS_torch_vehicle_semantic_lstm_cpu_file, device_);
+    torch_pedestrian_model_ = torch::jit::load(
+        FLAGS_torch_pedestrian_semantic_lstm_cpu_file, device_);
   }
   torch::set_num_threads(1);
+
+  // Fake intput for the first frame
+  torch::Tensor img_tensor = torch::zeros({1, 3, 224, 224});
+  torch::Tensor obstacle_pos = torch::zeros({1, 20, 2});
+  torch::Tensor obstacle_pos_step = torch::zeros({1, 20, 2});
+  std::vector<torch::jit::IValue> torch_inputs;
+  torch_inputs.push_back(c10::ivalue::Tuple::create(
+      {std::move(img_tensor.to(device_)), std::move(obstacle_pos.to(device_)),
+       std::move(obstacle_pos_step.to(device_))},
+      c10::TupleType::create(
+          std::vector<c10::TypePtr>(3, c10::TensorType::create()))));
+  // Run one inference to avoid very slow first inference later
+  torch_default_output_tensor_ =
+      torch_vehicle_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
+  torch_default_output_tensor_ =
+      torch_pedestrian_model_.forward(torch_inputs).toTensor().to(torch::kCPU);
 }
 
 }  // namespace prediction

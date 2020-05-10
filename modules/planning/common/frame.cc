@@ -21,7 +21,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <memory>
 
 #include "modules/routing/proto/routing.pb.h"
 
@@ -29,11 +28,13 @@
 #include "modules/common/configs/vehicle_config_helper.h"
 #include "modules/common/math/vec2d.h"
 #include "modules/common/time/time.h"
+#include "modules/common/util/point_factory.h"
 #include "modules/common/vehicle_state/vehicle_state_provider.h"
 #include "modules/map/hdmap/hdmap_util.h"
 #include "modules/map/pnc_map/path.h"
 #include "modules/map/pnc_map/pnc_map.h"
 #include "modules/planning/common/ego_info.h"
+#include "modules/planning/common/feature_output.h"
 #include "modules/planning/common/planning_context.h"
 #include "modules/planning/common/planning_gflags.h"
 #include "modules/planning/common/util/util.h"
@@ -99,8 +100,7 @@ bool Frame::Rerouting() {
   auto request = local_view_.routing->routing_request();
   request.clear_header();
 
-  auto point = common::util::MakePointENU(
-      vehicle_state_.x(), vehicle_state_.y(), vehicle_state_.z());
+  auto point = common::util::PointFactory::ToPointENU(vehicle_state_);
   double s = 0.0;
   double l = 0.0;
   hdmap::LaneInfoConstPtr lane;
@@ -218,7 +218,7 @@ const Obstacle *Frame::CreateStopObstacle(
   const double box_center_s = obstacle_s + FLAGS_virtual_stop_wall_length / 2.0;
   auto box_center = reference_line.GetReferencePoint(box_center_s);
   double heading = reference_line.GetReferencePoint(obstacle_s).heading();
-  constexpr double kStopWallWidth = 4.0;
+  static constexpr double kStopWallWidth = 4.0;
   Box2d stop_wall_box{box_center, heading, FLAGS_virtual_stop_wall_length,
                       kStopWallWidth};
 
@@ -376,6 +376,8 @@ Status Frame::InitFrameData() {
 
   ReadPadMsgDrivingAction();
 
+  ReadLearningDataFrame();
+
   return Status::OK();
 }
 
@@ -482,6 +484,17 @@ void Frame::ReadTrafficLights() {
   }
   for (const auto &traffic_light : traffic_light_detection->traffic_light()) {
     traffic_lights_[traffic_light.id()] = &traffic_light;
+  }
+}
+
+void Frame::ReadLearningDataFrame() {
+  learning_data_frame_.Clear();
+  if (FLAGS_planning_offline_mode != 1) {
+    return;
+  }
+  auto learning_data_frame = FeatureOutput::GetLatestLearningDataFrame();
+  if (learning_data_frame != nullptr) {
+    learning_data_frame_.CopyFrom(*learning_data_frame);
   }
 }
 

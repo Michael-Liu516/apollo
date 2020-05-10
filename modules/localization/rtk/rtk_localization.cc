@@ -188,8 +188,6 @@ void RTKLocalization::PrepareLocalizationMsg(
 
 void RTKLocalization::FillLocalizationMsgHeader(
     LocalizationEstimate *localization) {
-  DCHECK_NOTNULL(localization);
-
   auto *header = localization->mutable_header();
   double timestamp = apollo::common::time::Clock::NowInSeconds();
   header->set_module_name(module_name_);
@@ -401,7 +399,6 @@ bool RTKLocalization::InterpolateIMU(const CorrectedImu &imu1,
                                      const CorrectedImu &imu2,
                                      const double timestamp_sec,
                                      CorrectedImu *imu_msg) {
-  DCHECK_NOTNULL(imu_msg);
   if (!(imu1.header().has_timestamp_sec() &&
         imu2.header().has_timestamp_sec())) {
     AERROR << "imu1 and imu2 has no header or no timestamp_sec in header";
@@ -418,7 +415,7 @@ bool RTKLocalization::InterpolateIMU(const CorrectedImu &imu1,
     AERROR << "[InterpolateIMU2]: the given time stamp[" << timestamp_sec
            << "] is newer than the 2nd message["
            << imu2.header().timestamp_sec() << "]";
-    *imu_msg = imu1;
+    *imu_msg = imu2;
   } else {
     *imu_msg = imu1;
     imu_msg->mutable_header()->set_timestamp_sec(timestamp_sec);
